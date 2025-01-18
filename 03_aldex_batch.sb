@@ -1,0 +1,36 @@
+#!/bin/bash
+
+#SBATCH --partition=condo
+
+#SBATCH --nodes=1
+
+#SBATCH --ntasks-per-node=1
+
+#SBATCH --cpus-per-task=2
+
+#SBATCH --time=06:00:00
+
+#SBATCH --account=sio141
+
+#SBATCH --qos=condo
+
+#SBATCH --mail-type END
+
+#SBATCH --mail-user barul@ucsd.edu
+
+###
+#imitates the folllowing interactive command: srun --partition=condo --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=4 --mem=8GB -t 05:30:00 -A sio141 --qos=condo --wait=0 --export=ALL /bin/bash
+
+#instead of scaling with both cores and memory and wasting credits, could just let the job slow cook. but this seems to lead to unresponsive nodes getting killed at exactly 43:14. 2 cores ends in one of the threads not returning in time (unequal loads?)
+
+source activate base
+conda activate qiime2-2023.9
+
+HOMEDIR=/tscc/nfs/home/barul/calcofi-ncog-metaT/
+cd ${HOMEDIR}
+echo "Running ${1}"
+Rscript ${1}
+
+### why source activate base? activate is miniconda's activate script.
+#conda init bash #doesn't work, doesn't lead to a reload of shell with new code
+#module load conda #won't work, other slurms may have it but "module spider" reveals no such module here
