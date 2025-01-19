@@ -3,35 +3,39 @@
 ###FLAGS
 benchmark <- F
 benchmark.size <- 100000
-run.parallel <- T
+run.parallel <- F #running on PC now
 
 #step 1: adding personal library to path
-personal.lib <- file.path(getwd(), "R_lib")
-.libPaths( c( .libPaths(), personal.lib))
+### on PC, no need
+#personal.lib <- file.path(getwd(), "R_lib")
+#.libPaths( c( .libPaths(), personal.lib))
 
 #imports - no longer need data.table since non-mixo reads filtered out
 #library(data.table)
 library(ALDEx2)
 
-#1) Import design frame, will have rows for admitted samples
-#and column of conditions (factor A/B). sep = default, ";'
-design.frame <- read.csv2("02_shallow_split_temp.tsv", row.names = 1)
+#1) Import design frame, 
+#will have rows for admitted samples (indexed by sample num)
+#and column of conditions (factor A/B).
+###will now require a filepath from args[1]
+args <- commandArgs(trailingOnly=T)
+if(is.na(args[1])){
+  print("Please provide a path to a folder with an expdesign.tsv")
+  q()
+}
+workspace = args[1]
 
-#2) import data -  data table does not have an index column. don't know if ALDEx2 will generate indices.
-#this may not be possible at all without filtering out clearly non mixotroph sequences.
-#even with 72677 features (100x decrease) it takes over an hour (at least).
-#with 200k features it completes but starts running into what looks like memory issues. parallelization doesn't help. not sure if there's a specific memory alloc function in tscc.
-#file.length = 7267714 
-#orfhits <- fread("01_out_mixo_orfs_rawcounts.tsv", 
-#                 drop = c(1),
-#                 #nrows = file.length %/% 100
-#)
+design.frame <- read.csv2(file.path(workspace, "expdesign.tsv"), sep = "\t", row.names = 1)
+sprintf("Read %s", file.path(workspace, "expdesign.tsv"))
 
-###benchmark setup
-#use dataframes, not prioritizing memory and at least these allow rownames
-#'reads' matrix for aldex.clr has to be integers only - CLR substitutes for
-#all other normalization?
-orfhits <- read.csv2("01_out_mixo_orfs_rawcounts.tsv", 
+###2) import data
+if(is.na(args[2])){
+  print("Please provide a path to an input file.")
+  q()
+}
+orfhits_path = args[2]
+
+orfhits <- read.csv2(orfhits_path, 
                         sep = "\t", 
                         row.names = 1,
                         numerals = "allow.loss",
@@ -47,9 +51,14 @@ if(benchmark) {
 sprintf("Using %i of %i features", dim(orfhits)[1], full.length)
 
 #select rows according to design.frame
-sprintf("Using %i of %i samples", dim(design.frame)[1], dim(orfhits)[2])
-orfhits <- orfhits[,rownames(design.frame)]
-print(dim(orfhits))
+intersection = intersect(colnames(orfhits), rownames(design.frame))
+sprintf("Intended to use %i samples, only %i found in frame", dim(design.frame)[1], length(intersection))
+sprintf("Using %i of %i samples", length(intersection), dim(orfhits)[2])
+print(table(design.frame[intersection, 1]))
+#print(rownames(design.frame))
+#print(colnames(orfhits)) #this actually only has 307 cols not 558
+orfhits <- orfhits[, intersection]
+#print(dim(orfhits))
 gc(verbose = T)
 
 #aldex object - can generate plots, etc
@@ -60,7 +69,7 @@ gc(verbose = T)
 
 #using the modular functions so I can parallelize them
 #gamma throws error, figure it out
-x <- aldex.clr(orfhits, design.frame$conditions, mc.samples=128, 
+x <- aldex.clr(orfhits, design.frame[intersection, 1], mc.samples=128, 
                 denom="all", verbose=T, useMC=run.parallel)#, gamma=0.25)
 print("CLR complete")
 
@@ -84,8 +93,9 @@ sprintf("Total output data size %i", object.size(x.all))
 
 #serialize aldex object & reload when needed
 #doing this before the graph stuff to avoid errors
-saveRDS(x.all, file = "aldex_object.data", compress = "gzip")
-
+exp_condition = args[3]
+saveRDS(x.all, file = file.path(workspace, exp_condition, "aldex_object.data"), compress = "gzip")
+write.csv2(x.all, file = file.path(workspace, exp_condition, "aldex_object.tsv"), sep = "\t")
 #graphing, save for next
 #par(mfrow=c(1,2))
 #next time read the code before making assumptions about arguments
@@ -98,13 +108,13 @@ saveRDS(x.all, file = "aldex_object.data", compress = "gzip")
 #is this because R version is behind?
 
 #more lenient cutoff for significance: t 
-aldex.plot(x.all, type="volcano", test="welch") #t test on plot
-aldex.plot(x.all, type="volcano.var", test="welch") #only t test on plot
+#aldex.plot(x.all, type="volcano", test="welch") #t test on plot
+#aldex.plot(x.all, type="volcano.var", test="welch") #only t test on plot
 
 #stricter cutoffs: absolute value of effect size has to be >1
 #welch t test p value has to be greater than 0.05
-aldex.plot(x.all, type="volcano", test="both") #t test on plot
-aldex.plot(x.all, type="volcano.var", test="both") #only t test on plot
+#aldex.plot(x.all, type="volcano", test="both") #t test on plot
+#aldex.plot(x.all, type="volcano.var", test="both") #only t test on plot
 
 
 

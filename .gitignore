@@ -1,0 +1,4 @@
+*__pycache__*
+data/totalRNA/*
+data/trophic_type_databases/*
+data/polyA/*

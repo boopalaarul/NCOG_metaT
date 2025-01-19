@@ -7,3 +7,10 @@ print(3)
 #remember R vectors are 1 indexed...
 sprintf("%i",dim(frame)[1])
 print(sprintf("%i",3))
+
+#accessing scrip arguments
+args <- commandArgs(trailingOnly=T)
+if(is.na(args[1])){
+    print("Yowza")
+}
+print(file.path(args[1], "lame"))
